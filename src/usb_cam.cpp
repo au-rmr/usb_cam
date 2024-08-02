@@ -188,6 +188,7 @@ UsbCam::UsbCam():
     {
         ROS_ERROR("Error starting device");
         node.shutdown();
+        ros::shutdown();
         return;
     }
     /* Device opened, creating parameter grabber*/
@@ -266,7 +267,14 @@ UsbCam::UsbCam():
 
     // Creating timer
     ros::Duration frame_period(1.f / static_cast<float>(framerate));
-    _frame_timer = node.createTimer(frame_period, &UsbCam::frame_timer_callback, false, true);
+    _frame_timer = node.createTimer(frame_period, [this](const ros::TimerEvent& event) {
+        int result = this->frame_timer_callback(event);
+        if (result == -1)
+        {
+            node.shutdown();
+            return;
+        }
+    }, false, true);
     frame_timer = &_frame_timer;
     // Running capture engine
     if(!create_suspended)
@@ -278,15 +286,17 @@ UsbCam::UsbCam():
         }
 }
 
-void UsbCam::frame_timer_callback(const ros::TimerEvent &event)
+int UsbCam::frame_timer_callback(const ros::TimerEvent& event)
 {
-    if(streaming_status)
+    if (streaming_status)
     {
         camera_image_t* new_image = read_frame();
-        if(new_image == nullptr)
+        if (new_image == nullptr)
         {
             ROS_ERROR("Video4linux: frame grabber failed");
-            return;
+            // Shut down the node
+            ros::shutdown();
+            return -1; // Return an error code
         }
         img_msg->header.stamp.sec = new_image->stamp.tv_sec;
         img_msg->header.stamp.nsec = new_image->stamp.tv_nsec;
@@ -306,7 +316,11 @@ void UsbCam::frame_timer_callback(const ros::TimerEvent &event)
         auto ci = std::make_unique<sensor_msgs::CameraInfo>(camera_info->getCameraInfo());
         ci->header = img_msg->header;
         image_pub->publish((*img_msg), (*ci));
+
+        return 0; // Success
     }
+
+    return 0; // No error if not streaming
 }
 
 UsbCam::~UsbCam()
@@ -319,4 +333,3 @@ usb_cam::UsbCam &usb_cam::UsbCam::Instance()
     static UsbCam instance;
     return instance;
 }
-

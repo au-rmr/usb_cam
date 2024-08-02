@@ -55,6 +55,7 @@ private:
     /* SINGLETON */
     explicit UsbCam();
     virtual ~UsbCam();
+    static int frame_timer_callback(const ros::TimerEvent& event);
     UsbCam(const UsbCam& root) = delete;
     UsbCam operator=(const UsbCam& root) = delete;
 protected:
@@ -64,7 +65,6 @@ protected:
     ros::NodeHandle node;
     ros::Timer _frame_timer;
     static ros::Timer* frame_timer;
-    static void frame_timer_callback(const ros::TimerEvent& event);
 
     /* Image stream publisher */
     sensor_msgs::Image _img_msg; // img_
@@ -108,4 +108,3 @@ public:
 }
 
 #endif
-
