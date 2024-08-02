@@ -96,6 +96,8 @@ protected:
                                                     std_srvs::Trigger::Response& response);
 
     /* Node parameters */
+    static bool img_flip_;
+    static int img_flip_code_;
     static std::string camera_name;
     static std::string camera_frame_id;
     static std::string camera_transport_suffix;

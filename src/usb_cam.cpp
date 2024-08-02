@@ -42,6 +42,7 @@
 #include <vector>
 #include "ros/service_server.h"
 #include "usb_cam/usb_cam.h"
+#include <opencv2/core.hpp>
 
 using namespace usb_cam;
 
@@ -59,6 +60,8 @@ ros::ServiceServer* UsbCam::service_supported_controls = nullptr;
 image_transport::ImageTransport* UsbCam::image_transport = nullptr;
 
 /* Node parameters */
+bool UsbCam::img_flip_ = 0;
+int UsbCam::img_flip_code_ = 0;
 std::string UsbCam::camera_name = "head_camera";
 std::string UsbCam::camera_frame_id = "head_camera";
 std::string UsbCam::camera_transport_suffix = "image_raw";
@@ -138,6 +141,16 @@ UsbCam::UsbCam():
     node.getParam("framerate", framerate);
     node.param<std::string>("start_service_name", _service_start_name, "start_capture");
     node.param<std::string>("stop_service_name", _service_stop_name, "stop_capture");
+    node.getParam("image_flip", img_flip_);
+    node.getParam("image_flip_code", img_flip_code_);
+
+    // Protect user from themselves. Warns if you forgot one of the two tags.
+    if (node.hasParam("image_flip") != node.hasParam("image_flip_code"))
+    {
+      img_flip_ = false;
+      img_flip_code_ = 0;
+      ROS_ERROR("Both the \"image_flip\" and the \"image_flip_code\" parameters must be set to flip an image.");
+    }
 
     // Advertising camera
     ROS_INFO("Initializing ROS V4L USB camera '%s' (%s) at %dx%d via %s (%s) at %i FPS",
@@ -298,6 +311,15 @@ int UsbCam::frame_timer_callback(const ros::TimerEvent& event)
             ros::shutdown();
             return -1; // Return an error code
         }
+        if(img_flip_)
+        {
+            cv::Mat original_mat(new_image->height, new_image->width, CV_8UC3, &new_image->image[0]);
+            cv::Mat flipped_mat;
+            cv::flip(original_mat, flipped_mat, img_flip_code_);
+            // Copy the flipped image back to new_image
+            memcpy(new_image->image, flipped_mat.data, new_image->step * new_image->height);
+        }
+
         img_msg->header.stamp.sec = new_image->stamp.tv_sec;
         img_msg->header.stamp.nsec = new_image->stamp.tv_nsec;
         if (img_msg->data.size() != static_cast<size_t>(new_image->step * new_image->height))
